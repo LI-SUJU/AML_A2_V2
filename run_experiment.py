@@ -8,179 +8,127 @@ from ipl import IPL
 from surrogate_model import SurrogateModel
 import numpy as np
 from itertools import product
+from matplotlib.colors import ListedColormap
+from tabulate import tabulate
+from constants import DATA_FILES, NUM_ITERATIONS, NUM_EXPERIMENTS, MIN_ANCHOR_SIZES
 
-def parse_args():
+def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_space_file', type=str, default='lcdb_config_space_knn.json')
-    parser.add_argument('--configurations_performance_file', type=str, default='config_performances_dataset-6.csv')
-    # max_anchor_size: connected to the configurations_performance_file. The max value upon which anchors are sampled
+    parser.add_argument('--performance_file', type=str, default='config_performances_dataset-6.csv')
     parser.add_argument('--num_iterations', type=int, default=10)
-
     return parser.parse_args()
 
-def count_evalutions_linear(eval_dict):
-    ''' Calculate total number of evaluations weighted by anchor size.
-    
-    param: eval_dict (dict): Dictionary mapping anchor sizes to number of evaluations
-    
-    return: int: Total weighted number of evaluations
-    '''
-    
-    evaluations = 0
-    for anchor,evals in eval_dict.items():
-        evaluations+=anchor*evals
-    return evaluations
+def calculate_evaluations(evaluation_dict, weight_function):
+    return sum(weight_function(anchor) * evaluations for anchor, evaluations in evaluation_dict.items())
 
-def count_evaluations_log(eval_dict):
-    ''' Calculate total number of evaluations weighted by log(anchor size).
-    
-    param: eval_dict (dict): Dictionary mapping anchor sizes to number of evaluations
-    
-    return: int: Total weighted number of evaluations
-    '''
-    evaluations = 0
-    for anchor,evals in eval_dict.items():
-        evaluations+=np.log(anchor)*evals
-    return evaluations
+def calculate_linear_evaluations(evaluation_dict):
+    return calculate_evaluations(evaluation_dict, lambda x: x)
 
-def count_evaluations_square(eval_dict):
-    ''' Calculate total number of evaluations weighted by square root of anchor size.
-    
-    param: eval_dict (dict): Dictionary mapping anchor sizes to number of evaluations
-    
-    return: int: Total weighted number of evaluations
-    '''
-    evaluations = 0
-    for anchor,evals in eval_dict.items():
-        evaluations += anchor**2 * evals
-    return evaluations
+def calculate_log_evaluations(evaluation_dict):
+    return calculate_evaluations(evaluation_dict, np.log)
 
-def experiment(vertical_eval,iterations,config_space,name):
-    '''
-    Run a single experiment with given vertical evaluator.
-    
-    param: vertical_eval: LCCV or IPL evaluator instance
-    param: iterations (int): number of configurations to evaluate
-    param: config_space: configSpace containing hyperparameter definitions
-    param: name (str): name of dataset for plot labeling
-    
-    return: tuple: (total_evaluations, best_score_found)
-    
-    '''
-    evaluations_dict = {anchor:0 for anchor in vertical_eval.anchors}
-    best_so_far = None
-    
-    for _ in range(iterations):
-        theta_new = dict(config_space.sample_configuration())
-        result,evaluations_dict = vertical_eval.evaluate_model(best_so_far, theta_new,evaluations_dict)
-        final_result = result[-1][1]
-        if best_so_far is None or final_result < best_so_far:
-            best_so_far = final_result
-        x_values = [i[0] for i in result]
-        y_values = [i[1] for i in result]
-        plt.plot(x_values, y_values, "-o")
-    plt.title(f'{name} {vertical_eval.method}')
-    plt.ylabel('error')
-    plt.xlabel('anchor')
-    plt.savefig(f'{name}_{vertical_eval.method}_{iterations}.png')
+def calculate_square_evaluations(evaluation_dict):
+    return calculate_evaluations(evaluation_dict, lambda x: x**2)
+
+def perform_experiment(vertical_evaluator, iterations, config_space, dataset_name):
+    evaluation_counts = {anchor: 0 for anchor in vertical_evaluator.anchors}
+    best_result = None
+
+    for iteration in range(iterations):
+        new_configuration = dict(config_space.sample_configuration())
+        results, evaluation_counts = vertical_evaluator.evaluate_model(best_result, new_configuration, evaluation_counts)
+        final_result = results[-1][1]
+        if best_result is None or final_result < best_result:
+            best_result = final_result
+
+        x_values = [result[0] for result in results]
+        y_values = [result[1] for result in results]
+        norm = plt.Normalize(0, iterations)
+        cmap = plt.get_cmap('plasma', iterations)
+        colors = cmap(norm(iteration))
+        listed_cmap = ListedColormap(cmap(np.linspace(0, 1, iterations)))
+        plt.plot(x_values, y_values, color=colors, linestyle='-', linewidth=0.5)
+        plt.scatter(x_values, y_values, c=[colors] * len(x_values), cmap=listed_cmap, s=10)
+
+    plt.title(f'{vertical_evaluator.method} on {dataset_name}')
+    plt.ylabel('Error')
+    plt.xlabel('Anchor Size')
+    plt.axhline(best_result, color='black', linestyle='--', linewidth=0.5)
+    plt.text(0, best_result, f'Best so far: {best_result:.2f}', color='black')
+    plt.savefig(f'{dataset_name}_{vertical_evaluator.method}_{iterations}.png')
     plt.close()
-    evalutations_linear = count_evalutions_linear(evaluations_dict)
-    evalutations_log = count_evaluations_log(evaluations_dict)
-    evalutations_square = count_evaluations_square(evaluations_dict)
-    return evalutations_linear, evalutations_log, evalutations_square, best_so_far
 
+    linear_evaluations = calculate_linear_evaluations(evaluation_counts)
+    log_evaluations = calculate_log_evaluations(evaluation_counts)
+    square_evaluations = calculate_square_evaluations(evaluation_counts)
+    return linear_evaluations, log_evaluations, square_evaluations, best_result
 
-def run(config_space,data_file,nr_iterations,nr_experiments,min_anchor):
-    '''
-    Run complete experiment comparing LCCV and IPL methods.
-    '''
-    name = data_file.split('_')[-1][:-4]
-    df = pd.read_csv(data_file)
+def run_experiment(config_space, data_file, num_iterations, num_experiments, min_anchor_size):
+    dataset_name = data_file.split('_')[-1][:-4]
+    data_frame = pd.read_csv(data_file)
     surrogate_model = SurrogateModel(config_space)
-    surrogate_model.fit(df)
-    anchors = sorted(df.loc[df.anchor_size>=min_anchor,'anchor_size'].unique())
-    print('surrogate model fitted')
+    surrogate_model.fit(data_frame)
+    anchors = sorted(data_frame.loc[data_frame.anchor_size >= min_anchor_size, 'anchor_size'].unique())
+    print('Surrogate model fitted')
 
-    # LCCV
-    vertical_eval = LCCV(surrogate_model, anchors)
-    lccv_eval_linear = []
-    lccv_eval_log = []
-    lccv_eval_square = []
-    lccv_best = []
-    for _ in range(nr_experiments):
-        evalutations_linear, evalutations_log, evalutations_square,best_score = experiment(vertical_eval,nr_iterations,config_space,name)
-        lccv_eval_linear.append(evalutations_linear)
-        lccv_eval_log.append(evalutations_log)
-        lccv_eval_square.append(evalutations_square)
-        lccv_best.append(best_score)
-    print('LCCV done')
-    # IPL
-    ipl_eval_linear = []
-    ipl_eval_log = []
-    ipl_eval_square = []
-    ipl_best = []
-    vertical_eval = IPL(surrogate_model, anchors)
-    for i in range(nr_experiments):
-        evalutations_linear, evalutations_log, evalutations_square,best_score = experiment(vertical_eval,nr_iterations,config_space,name)
-        ipl_eval_linear.append(evalutations_linear)
-        ipl_eval_log.append(evalutations_log)
-        ipl_eval_square.append(evalutations_square)
-        ipl_best.append(best_score)
-    print('IPL done')
-    
-    # ratio of lccv to ipl: lccv/ipl
-    ratio_linear = ((1/np.array(lccv_best))/np.array(lccv_eval_linear))/((1/np.array(ipl_best))/np.array(ipl_eval_linear))
-    ratio_log = ((1/np.array(lccv_best))/np.array(lccv_eval_log))/((1/np.array(ipl_best))/np.array(ipl_eval_log))
-    ratio_square = ((1/np.array(lccv_best))/np.array(lccv_eval_square))/((1/np.array(ipl_best))/np.array(ipl_eval_square))
-    # Gather results
-    # lccv_eval = np.array(lccv_eval)/anchors[-1]
-    # ipl_eval = np.array(ipl_eval)/anchors[-1]
-    return {('LCCV','score'):f'{np.mean(lccv_best):.2f} std {np.std(lccv_best):.3f}',
-            ('LCCV','evalutations_linear'):f'{np.mean(lccv_eval_linear):.2f} std {np.std(lccv_eval_linear):.3f}',
-            ('LCCV','evalutations_log'):f'{np.mean(lccv_eval_log):.2f} std {np.std(lccv_eval_log):.3f}',
-            ('LCCV','evalutations_square'):f'{np.mean(lccv_eval_square):.2f} std {np.std(lccv_eval_square):.3f}',
-            ('IPL','score'):f' {np.mean(ipl_best):.2f} std {np.std(ipl_best):.3f}',
-            ('IPL','evalutations_linear'):f'{np.mean(ipl_eval_linear):.2f} std {np.std(ipl_eval_linear):.3f}',
-            ('IPL','evalutations_log'):f'{np.mean(ipl_eval_log):.2f} std {np.std(ipl_eval_log):.3f}',
-            ('IPL','evalutations_square'):f'{np.mean(ipl_eval_square):.2f} std {np.std(ipl_eval_square):.3f}',
-            ('ratio','evalutations_linear'):f'{np.mean(ratio_linear):.2f} std {np.std(ratio_linear):.3f}',
-            ('ratio','evalutations_log'):f'{np.mean(ratio_log):.2f} std {np.std(ratio_log):.3f}',
-            ('ratio','evalutations_square'):f'{np.mean(ratio_square):.2f} std {np.std(ratio_square):.3f}'
-            }
+    results = {'LCCV': {'linear': [], 'log': [], 'square': [], 'best': []},
+               'IPL': {'linear': [], 'log': [], 'square': [], 'best': []}}
 
+    for method in ['LCCV', 'IPL']:
+        vertical_evaluator = LCCV(surrogate_model, anchors) if method == 'LCCV' else IPL(surrogate_model, anchors)
+        for _ in range(num_experiments):
+            linear_evaluations, log_evaluations, square_evaluations, best_score = perform_experiment(vertical_evaluator, num_iterations, config_space, dataset_name)
+            results[method]['linear'].append(linear_evaluations)
+            results[method]['log'].append(log_evaluations)
+            results[method]['square'].append(square_evaluations)
+            results[method]['best'].append(best_score)
+        print(f'{method} done')
+
+    ratio_linear = (1 / np.array(results['LCCV']['best']) / np.array(results['LCCV']['linear'])) / \
+                   (1 / np.array(results['IPL']['best']) / np.array(results['IPL']['linear']))
+    ratio_log = (1 / np.array(results['LCCV']['best']) / np.array(results['LCCV']['log'])) / \
+                (1 / np.array(results['IPL']['best']) / np.array(results['IPL']['log']))
+    ratio_square = (1 / np.array(results['LCCV']['best']) / np.array(results['LCCV']['square'])) / \
+                   (1 / np.array(results['IPL']['best']) / np.array(results['IPL']['square']))
+
+    return {
+        ('LCCV', 'score'): f'{np.mean(results["LCCV"]["best"]):.2f} std {np.std(results["LCCV"]["best"]):.3f}',
+        ('LCCV', 'evaluations_linear'): f'{np.mean(results["LCCV"]["linear"]):.2f} std {np.std(results["LCCV"]["linear"]):.3f}',
+        ('LCCV', 'evaluations_log'): f'{np.mean(results["LCCV"]["log"]):.2f} std {np.std(results["LCCV"]["log"]):.3f}',
+        ('LCCV', 'evaluations_square'): f'{np.mean(results["LCCV"]["square"]):.2f} std {np.std(results["LCCV"]["square"]):.3f}',
+        ('IPL', 'score'): f'{np.mean(results["IPL"]["best"]):.2f} std {np.std(results["IPL"]["best"]):.3f}',
+        ('IPL', 'evaluations_linear'): f'{np.mean(results["IPL"]["linear"]):.2f} std {np.std(results["IPL"]["linear"]):.3f}',
+        ('IPL', 'evaluations_log'): f'{np.mean(results["IPL"]["log"]):.2f} std {np.std(results["IPL"]["log"]):.3f}',
+        ('IPL', 'evaluations_square'): f'{np.mean(results["IPL"]["square"]):.2f} std {np.std(results["IPL"]["square"]):.3f}',
+        ('ratio', 'evaluations_linear'): f'{np.mean(ratio_linear):.2f} std {np.std(ratio_linear):.3f}',
+        ('ratio', 'evaluations_log'): f'{np.mean(ratio_log):.2f} std {np.std(ratio_log):.3f}',
+        ('ratio', 'evaluations_square'): f'{np.mean(ratio_square):.2f} std {np.std(ratio_square):.3f}'
+    }
+
+def format_results_as_table(result_dataframe):
+    return tabulate(result_dataframe, headers='keys', tablefmt='grid', showindex="always")
 
 if __name__ == '__main__':
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    
+    logging.basicConfig(level=logging.INFO)
+
     config_space = ConfigSpace.ConfigurationSpace.from_json('lcdb_config_space_knn.json')
-    data_files = ['config_performances_dataset-6.csv',
-                  'config_performances_dataset-11.csv',
-                  'config_performances_dataset-1457.csv']
-    nr_iterations = 100
-    nr_experiments = 10
-    data_file_names = [data_file.split('_')[-1][:-4] for data_file in data_files]
-    min_anchor = {'dataset-6':16,
-                  'dataset-11':32,
-                  'dataset-1457':128}
-    tuples = [(a,b) for a,b in product(['LCCV','IPL','ratio'],['score','evalutations_linear','evalutations_log','evalutations_square'])]
-    index = pd.MultiIndex.from_tuples(tuples,names=['method','metric'])
-    columns = data_file_names
-    result_df = pd.DataFrame(columns=columns ,index=index)
+    data_files = ['config_performances_dataset-6.csv', 'config_performances_dataset-11.csv', 'config_performances_dataset-1457.csv']
+    num_iterations = 100
+    num_experiments = 10
+    min_anchor_sizes = {'dataset-6': 16, 'dataset-11': 32, 'dataset-1457': 128}
 
-    for data_file,name in zip(data_files,columns):
-        print(name)
-        result = run(config_space,data_file,nr_iterations,nr_experiments,min_anchor[name])
-        result_df[name] = result 
-        result_df.to_csv('comparison_results_with_ratio.csv')
+    metric_tuples = [(method, metric) for method, metric in product(['LCCV', 'IPL', 'ratio'], ['score', 'evaluations_linear', 'evaluations_log', 'evaluations_square'])]
+    index = pd.MultiIndex.from_tuples(metric_tuples, names=['method', 'metric'])
+    columns = [data_file.split('_')[-1][:-4] for data_file in data_files]
+    result_dataframe = pd.DataFrame(columns=columns, index=index)
 
-    def format_results_as_table(result_df):
-        """
-        Format the result DataFrame into a clean, tabular format using the `tabulate` library.
-        """
-        formatted_table = tabulate(result_df, headers='keys', tablefmt='grid', showindex="always")
-        return formatted_table
-    from tabulate import tabulate
-    formatted_table = format_results_as_table(result_df)
-    with open('formatted_comparison_results_with_ratio.txt', 'w') as f:
-        f.write(formatted_table)
+    for data_file, dataset_name in zip(data_files, columns):
+        print(dataset_name)
+        result = run_experiment(config_space, data_file, num_iterations, num_experiments, min_anchor_sizes[dataset_name])
+        result_dataframe[dataset_name] = result
+        result_dataframe.to_csv('comparison_results_with_ratio.csv')
+
+    formatted_table = format_results_as_table(result_dataframe)
+    with open('formatted_comparison_results_with_ratio.txt', 'w') as file:
+        file.write(formatted_table)
