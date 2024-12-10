@@ -6,68 +6,67 @@ class LCCV(VerticalModelEvaluator):
     
     @staticmethod
     def optimistic_extrapolation(
-        previous_anchor: int, previous_performance: float, 
-        current_anchor: int, current_performance: float, target_anchor: int
+        prev_anchor: int, prev_performance: float, 
+        curr_anchor: int, curr_performance: float, target_anchor: int
     ) -> float:
         """
-        Does the optimistic performance. Since we are working with a simplified
-        surrogate model, we can not measure the infimum and supremum of the
+        Performs optimistic extrapolation. Since we are working with a simplified
+        surrogate model, we cannot measure the infimum and supremum of the
         distribution. Just calculate the slope between the points, and
         extrapolate this.
 
-        :param previous_anchor: See name
-        :param previous_performance: Performance at previous anchor
-        :param current_anchor: See name
-        :param current_performance: Performance at current anchor
-        :param target_anchor: the anchor at which we want to have the
+        :param prev_anchor: Previous anchor point
+        :param prev_performance: Performance at previous anchor
+        :param curr_anchor: Current anchor point
+        :param curr_performance: Performance at current anchor
+        :param target_anchor: The anchor at which we want to have the
         optimistic extrapolation
         :return: The optimistic extrapolation of the performance
         """
-        slope = (previous_performance - current_performance) / (previous_anchor - current_anchor )
-        extrapolated = current_performance + (target_anchor - current_anchor) * slope
-        return extrapolated
+        slope = (prev_performance - curr_performance) / (prev_anchor - curr_anchor)
+        extrapolated_performance = curr_performance + (target_anchor - curr_anchor) * slope
+        return extrapolated_performance
     
-    def evaluate_model(self, best_so_far: typing.Optional[float], configuration: typing.Dict, evaluations_dict: typing.Dict) -> typing.List[typing.Tuple[int, float]]:
+    def evaluate_model(self, best_performance: typing.Optional[float], config: typing.Dict, evals_dict: typing.Dict) -> typing.List[typing.Tuple[int, float]]:
         """
-        Does a staged evaluation of the model, on increasing anchor sizes.
+        Performs a staged evaluation of the model on increasing anchor sizes.
         Determines after the evaluation at every anchor an optimistic
-        extrapolation. In case the optimistic extrapolation can not improve
-        over the best so far, it stops the evaluation.
-        In case the best so far is not determined (None), it evaluates
-        immediately on the final anchor (determined by self.final_anchor)
+        extrapolation. If the optimistic extrapolation cannot improve
+        over the best performance so far, it stops the evaluation.
+        If the best performance so far is not determined (None), it evaluates
+        immediately on the final anchor (determined by self.final_anchor).
 
-        :param best_so_far: indicates which performance has been obtained so far
-        :param configuration: A dictionary indicating the configuration
+        :param best_performance: Indicates the best performance obtained so far
+        :param config: A dictionary indicating the configuration
+        :param evals_dict: A dictionary to keep track of evaluations
 
         :return: A tuple of the evaluations that have been done. Each element of
         the tuple consists of two elements: the anchor size and the estimated
         performance.
         """
         self.method = 'LCCV'
-        if best_so_far == None:
-            
-            configuration["anchor_size"] = self.final_anchor
-            evaluations_dict[self.final_anchor]+=1
-            config = pd.DataFrame([dict(configuration)])
-            result = self.surrogate_model.predict(config)[0]
-            return ([(self.final_anchor, result)], evaluations_dict)
+        if best_performance is None:
+            config["anchor_size"] = self.final_anchor
+            evals_dict[self.final_anchor] += 1
+            config_df = pd.DataFrame([dict(config)])
+            result = self.surrogate_model.predict(config_df)[0]
+            return ([(self.final_anchor, result)], evals_dict)
+        
         results = []
 
         for anchor in self.anchors:
-            evaluations_dict[anchor]+=1
-            configuration["anchor_size"] = anchor
-            config = pd.DataFrame([dict(configuration)])
-            performance = self.surrogate_model.predict(config)[0]
+            evals_dict[anchor] += 1
+            config["anchor_size"] = anchor
+            config_df = pd.DataFrame([dict(config)])
+            performance = self.surrogate_model.predict(config_df)[0]
             results.append((anchor, performance))
 
             if len(results) >= 2: 
-                extrapolated = self.optimistic_extrapolation(results[-2][0], results[-2][1], #  previous_anchor: int, previous_performance: float, 
-                                                             results[-1][0], results[-1][1], # current_anchor: int, current_performance: float,
-                                                             self.final_anchor)
-                # print (f"extrapolated {extrapolated}, best_so_far { best_so_far}")
-                if extrapolated > best_so_far:
+                extrapolated_performance = self.optimistic_extrapolation(
+                    results[-2][0], results[-2][1],  # prev_anchor, prev_performance
+                    results[-1][0], results[-1][1],  # curr_anchor, curr_performance
+                    self.final_anchor
+                )
+                if extrapolated_performance > best_performance:
                     break     
-        return (results, evaluations_dict)
-
-        
-            
+        return (results, evals_dict)

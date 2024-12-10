@@ -1,0 +1,13 @@
+,Dataset,Stats,LCCV Mean ± Std,IPL Mean ± Std,Ratio Mean ± Std
+0,dataset-6,Error,0.04 ± 0.001,0.05 ± 0.008,-
+1,dataset-6,Linear Evaluations,1930904.60 ± 201876.428,652843.80 ± 196063.886,0.42 ± 0.177
+2,dataset-6,Log Evaluations,6291.29 ± 534.787,2536.05 ± 422.754,0.50 ± 0.144
+3,dataset-6,Square Evaluations,14281197770.20 ± 1676328781.783,6157995726.60 ± 1841018110.996,0.54 ± 0.233
+4,dataset-11,Error,0.04 ± 0.008,0.03 ± 0.005,-
+5,dataset-11,Linear Evaluations,30431.80 ± 2636.495,56647.50 ± 5200.188,1.63 ± 0.357
+6,dataset-11,Log Evaluations,1667.84 ± 80.514,2330.54 ± 112.239,1.22 ± 0.255
+7,dataset-11,Square Evaluations,3783044.00 ± 707485.714,11221504.90 ± 1753283.639,2.65 ± 0.750
+8,dataset-1457,Error,0.56 ± 0.047,0.55 ± 0.028,-
+9,dataset-1457,Linear Evaluations,120965.80 ± 23569.053,115032.80 ± 12961.971,0.98 ± 0.280
+10,dataset-1457,Log Evaluations,2304.75 ± 248.249,2210.14 ± 114.843,0.96 ± 0.182
+11,dataset-1457,Square Evaluations,51671791.00 ± 16445900.138,51510273.80 ± 11361251.153,1.11 ± 0.469

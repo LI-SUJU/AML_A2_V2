@@ -1,3 +1,5 @@
+import ConfigSpace
+
 DATA_FILES = [
     'config_performances_dataset-6.csv',
     'config_performances_dataset-11.csv',
@@ -12,3 +14,5 @@ MIN_ANCHOR_SIZES = {
     'dataset-11': 32,
     'dataset-1457': 128
 }
+
+CONFIG_SPACE = ConfigSpace.ConfigurationSpace.from_json('lcdb_config_space_knn.json')

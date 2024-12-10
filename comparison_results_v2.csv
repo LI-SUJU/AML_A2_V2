@@ -1,5 +1,0 @@
-method,score,dataset-6,dataset-11,dataset-1457
-LCCV,score,0.04 std 0.001,0.04 std 0.008,0.70 std 0.076
-LCCV,evaluations,113.30 std 14.342,56.95 std 4.581,6.26 std 0.321
-IPL,score, 0.05 std 0.008, 0.03 std 0.003, 0.75 std 0.102
-IPL,evaluations,34.00 std 8.645,195.45 std 15.941,7.45 std 0.192

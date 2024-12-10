@@ -6,9 +6,10 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.pipeline import Pipeline
 import pandas as pd
-from config_encoder import ConfigEncoder
+# from config_encoder import ConfigEncoder
 import numpy as np 
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
+from tools import preprocess_configurations
 
 class SurrogateModel:
     """ Class to train a random forest regressor on a dataframe with hyperparameter configurations and 
@@ -18,7 +19,7 @@ class SurrogateModel:
     def __init__(self, config_space:str):
         self.config_space = config_space
         self.df = None
-        self.encoder = ConfigEncoder(self.config_space)
+        # self.encoder = ConfigEncoder(self.config_space)
         self.model = Pipeline([
                                ('model', RandomForestRegressor())])  
 
@@ -33,9 +34,10 @@ class SurrogateModel:
         y = df['score']
         self.features = df.columns[:-1]
         self.label = df.columns[-1]
-        df_encoded = self.encoder.transform(df)
-        self.df = df_encoded
-        self.model.fit(df_encoded[self.features],y)
+        # df_encoded = self.encoder.transform(df)
+        df_good_to_use = preprocess_configurations(self.config_space, df)
+        self.df = df_good_to_use
+        self.model.fit(df_good_to_use[self.features],y)
 
     def predict(self, theta_new):
         """
@@ -53,7 +55,7 @@ class SurrogateModel:
         for col in self.features:
             if col not in X.columns:
                 X[col] = None
-        T = self.encoder.transform(X)
+        T = preprocess_configurations(self.config_space, X)
         # print(T)
         return self.model.predict(T[self.features])
 
