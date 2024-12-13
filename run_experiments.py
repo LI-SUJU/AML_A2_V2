@@ -12,7 +12,21 @@ from matplotlib.colors import ListedColormap
 from tabulate import tabulate
 from constants import DATA_FILES, NUM_ITERATIONS, NUM_EXPERIMENTS, MIN_ANCHOR_SIZES, CONFIG_SPACE
 from tools import calculate_linear_evaluations, calculate_log_evaluations, calculate_square_evaluations
+import warnings
+from scipy.optimize import OptimizeWarning
 
+def custom_filter():
+    # Ignore specific FutureWarnings
+    warnings.filterwarnings(
+        "ignore",
+        category=FutureWarning,
+        message="Downcasting object dtype arrays on .fillna, .*"
+    )
+    
+    # Ignore OptimizeWarning
+    warnings.filterwarnings("ignore", category=OptimizeWarning)
+
+    warnings.filterwarnings("ignore", category=UserWarning)
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -62,20 +76,22 @@ def run_experiments(config_space, data_file, num_iterations, num_experiments, mi
     surrogate_model = SurrogateModel(config_space)
     surrogate_model.fit(data_frame)
     anchors = sorted(data_frame.loc[data_frame.anchor_size >= min_anchor_size, 'anchor_size'].unique())
-    print('Surrogate model fitted')
+    logging.info(f'Surrogate model fitted for dataset: {dataset_name}')
 
     results = {'LCCV': {'linear': [], 'log': [], 'square': [], 'best': []},
                'IPL': {'linear': [], 'log': [], 'square': [], 'best': []}}
 
     for method in ['LCCV', 'IPL']:
+        logging.info(f'Starting experiments for {method} on dataset: {dataset_name}')
         vertical_evaluator = LCCV(surrogate_model, anchors) if method == 'LCCV' else IPL(surrogate_model, anchors)
-        for _ in range(num_experiments):
+        for exp in range(1, num_experiments + 1):
+            logging.info(f'Running experiment {exp}/{num_experiments} for {method} on {dataset_name}')
             linear_evaluations, log_evaluations, square_evaluations, best_score = perform_single_experiment(vertical_evaluator, num_iterations, config_space, dataset_name)
             results[method]['linear'].append(linear_evaluations)
             results[method]['log'].append(log_evaluations)
             results[method]['square'].append(square_evaluations)
             results[method]['best'].append(best_score)
-        print(f'{method} done')
+        logging.info(f'{method} experiments completed for dataset: {dataset_name}')
 
     ratio_linear = (1 / np.array(results['LCCV']['best']) / np.array(results['LCCV']['linear'])) / \
                    (1 / np.array(results['IPL']['best']) / np.array(results['IPL']['linear']))
@@ -127,15 +143,17 @@ def initialize_dataframe(data_files):
 def run_record_experiments(data_files, config_space, num_iterations, num_experiments, min_anchor_sizes):
     result_dataframe = initialize_dataframe(data_files)
     for data_file, dataset_name in zip(data_files, result_dataframe.columns):
-        print(dataset_name)
+        logging.info(f'Processing dataset: {dataset_name}')
         result = run_experiments(config_space, data_file, num_iterations, num_experiments, min_anchor_sizes[dataset_name])
         result_dataframe[dataset_name] = result
         result_dataframe.to_csv('./results/results_with_ratio.csv')
+        logging.info(f'Dataset {dataset_name} processing completed.')
     return result_dataframe
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    custom_filter()
 
     config_space = CONFIG_SPACE
     data_files = DATA_FILES
