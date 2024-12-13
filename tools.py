@@ -14,42 +14,27 @@ def calculate_square_evaluations(evaluation_dict):
     return calculate_evaluations(evaluation_dict, lambda x: x**2)
 
 def preprocess_configurations(config_space, df):
-    """
-    Encodes the configurations from a dataframe based on the given ConfigSpace.
 
-    Args:
-        config_space (ConfigSpace.ConfigurationSpace): The configuration space defining hyperparameters.
-        df (pd.DataFrame): DataFrame containing configurations to be encoded.
-
-    Returns:
-        pd.DataFrame: Transformed DataFrame with missing values filled and categorical values mapped to integers.
     """
+    Preprocess a DataFrame with hyperparameter configurations to match the order of the configuration space.
+    This function fills missing values with default values and maps categorical columns to numerical values.
+    """
+
     # Create mappings for categorical hyperparameters
-    categories = {}
-    for param in config_space.get_hyperparameters():
-        if isinstance(param, ConfigSpace.hyperparameters.CategoricalHyperparameter):
-            categories[param.name] = {choice: num for num, choice in enumerate(param.choices)}
+    categories = {param.name: {choice: num for num, choice in enumerate(param.choices)}
+                  for param in config_space.get_hyperparameters()
+                  if isinstance(param, ConfigSpace.hyperparameters.CategoricalHyperparameter)}
 
-    # Create a copy of the DataFrame
+    # Fill missing values with defaults
     df = df.copy()
-
-    # Fill missing values with default values from the configuration space
     for param in config_space.get_hyperparameters():
-        if param.name not in df.columns:
-            df[param.name] = param.default_value
-        else:
-            df[param.name] = df[param.name].fillna(param.default_value).infer_objects(copy=False)
-
+        df[param.name] = df.get(param.name, param.default_value).fillna(param.default_value).infer_objects(copy=False)
 
     # Map categorical columns to numerical values
-    for column in df.columns:
-        if column in categories:
-            df[column] = df[column].map(categories[column])
+    df = df.apply(lambda col: col.map(categories[col.name]) if col.name in categories else col)
 
     # Reorder columns to match the order in the configuration space
     original_ordering = [param.name for param in config_space.get_hyperparameters()]
     if "anchor_size" in df.columns:
         original_ordering.append("anchor_size")
-    df = df[original_ordering]
-
-    return df
+    return df[original_ordering]

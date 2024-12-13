@@ -1,5 +1,3 @@
-import argparse
-import ConfigSpace
 import logging
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -28,12 +26,12 @@ def custom_filter():
 
     warnings.filterwarnings("ignore", category=UserWarning)
 
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config_space_file', type=str, default='lcdb_config_space_knn.json')
-    parser.add_argument('--performance_file', type=str, default='config_performances_dataset-6.csv')
-    parser.add_argument('--num_iterations', type=int, default=10)
-    return parser.parse_args()
+# def parse_arguments():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--config_space_file', type=str, default='lcdb_config_space_knn.json')
+#     parser.add_argument('--performance_file', type=str, default='config_performances_dataset-6.csv')
+#     parser.add_argument('--num_iterations', type=int, default=10)
+#     return parser.parse_args()
 
 
 def perform_single_experiment(vertical_evaluator, iterations, config_space, dataset_name):

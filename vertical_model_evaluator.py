@@ -1,22 +1,35 @@
 from abc import ABC
-import ConfigSpace
-import numpy as np
 from sklearn.pipeline import Pipeline
 import typing
 
 
 class VerticalModelEvaluator(ABC):
+    '''
+    VerticalModelEvaluator is a class that evaluates a surrogate model's performance over a range of anchor sizes.
+    Attributes:
+        surrogate_model (Pipeline): A sklearn pipeline object that has been fitted on LCDB data. It is used to predict 
+                                    the performance of a configuration given a numpy array consisting of configuration 
+                                    information and an anchor size.
+        anchors (list): A list of anchor sizes to be used for evaluation.
+        minimal_anchor: The smallest anchor size to be used.
+        final_anchor: The largest anchor size to be used.
+    Methods:
+        __init__(surrogate_model: Pipeline, anchors: list) -> None:
+            Initializes the VerticalModelEvaluator with a surrogate model and a list of anchors.
+            Parameters:
+                surrogate_model (Pipeline): A sklearn pipeline object that has already been fitted on LCDB data.
+                anchors (list): A list of anchor sizes to be used for evaluation.
+        evaluate_model(best_so_far: float, configuration: typing.Dict) -> typing.List[float]:
+            Evaluates the model's performance over the range of anchor sizes and returns the learning curve.
+            Parameters:
+                best_so_far (float): The best performance observed so far.
+                configuration (typing.Dict): A dictionary containing the configuration information.
+            Returns:
+                typing.List[float]: A list of tuples where each tuple contains an anchor size and the corresponding 
+                                    expected performance.
+    '''
 
     def __init__(self, surrogate_model: Pipeline, anchors: list) -> None:
-        """
-        Initialises the vertical model evaluator. Take note of what the arguments are
-        
-        :param surrogate_model: A sklearn pipeline object, which has already been fitted on LCDB data. 
-                You can use the predict model to predict for a numpy array (consisting of configuration 
-                information and an anchor size) what the performance of that configuration is. 
-        :param minimal_anchor: Smallest anchor to be used
-        :param final_anchor: Largest anchor to be used
-        """
         self.surrogate_model = surrogate_model
         self.anchors = anchors
         self.minimal_anchor = anchors[0]
