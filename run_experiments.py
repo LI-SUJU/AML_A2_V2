@@ -76,7 +76,7 @@ def run_experiments(config_space, data_file, num_iterations, num_experiments, mi
     surrogate_model = SurrogateModel(config_space)
     surrogate_model.fit(data_frame)
     anchors = sorted(data_frame.loc[data_frame.anchor_size >= min_anchor_size, 'anchor_size'].unique())
-    logging.info(f'Surrogate model fitted for dataset: {dataset_name}')
+    # logging.info(f'Surrogate model fitted for dataset: {dataset_name}')
 
     results = {'LCCV': {'linear': [], 'log': [], 'square': [], 'best': []},
                'IPL': {'linear': [], 'log': [], 'square': [], 'best': []}}
